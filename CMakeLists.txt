@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(LinpackTest)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 11)
 
 add_executable(
         LinpackTest
@@ -10,8 +10,11 @@ add_executable(
         Matrix.cpp
         LinpackTester.hpp
         SimpleIterationTester.hpp
-        MatrixError.hpp
-        SimpleIterationParallelTester.hpp Matrix.cpp MatrixUtils.hpp MatrixUtils.cpp)
+        matrix_error.hpp
+        SimpleIterationParallelTester.hpp
+        Matrix.cpp
+        LinpackResult.cpp
+        LinpackResult.h)
 
 include(FetchContent)
 FetchContent_Declare(

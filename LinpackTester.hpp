@@ -10,8 +10,6 @@ public:
   virtual ~LinpackTester() = default;
 
   virtual double invokeTest() = 0;
-
-  virtual bool isTerminationCriterion() = 0;
 };
 
 #endif //LINPACKTEST_LINPACKTESTER_HPP

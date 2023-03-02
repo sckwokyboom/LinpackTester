@@ -2,7 +2,7 @@
 #define LINPACKTESTER_HPP_SIMPLEITERATIONPARALLELTESTER_HPP
 
 #include <mpi.h>
-#include <chrono>
+//#include <chrono>
 #include "LinpackTester.hpp"
 
 class SimpleIterationParallelTester : public LinpackTester {
@@ -17,21 +17,35 @@ private:
   double normVector_b = 0;
   int rank_ = 0;
   char *isNeedToTerminate = nullptr;
+  double flopsResult = 0;
+  double timeInSec = 0;
+  static const int countOfFloatOpsToCalcSqrt = 6;
+  const int countOfFloatOpsToCalcNorm;
+  const int countOfFloatOpsToApproximateAlgValue;
 public:
-  explicit SimpleIterationParallelTester(const int &matrixSize = 500,
-                                         const double &epsilon = 0.1, const double &tau = 0.0001) :
-          matrixHeight_(matrixSize), epsilon_(epsilon), tau_(tau),
-          A(Matrix(matrixSize, matrixSize, 't')), x(Matrix(matrixSize, 1, 'n')), b(Matrix(matrixSize, 1, 'h')) {
+  explicit SimpleIterationParallelTester(const int &matrixSize = 700,
+                                         const double &epsilon = 0.1,
+                                         const double &tau = 0.0001) :
+          matrixHeight_(matrixSize),
+          epsilon_(epsilon),
+          tau_(tau),
+          A(Matrix(matrixSize, matrixSize, 't')),
+          x(Matrix(matrixSize, 1, 'n')),
+          b(Matrix(matrixSize, 1, 'h')),
+          countOfFloatOpsToCalcNorm(2 * matrixSize),
+          countOfFloatOpsToApproximateAlgValue(2 * matrixSize * matrixSize + 2 * matrixSize) {
+
     MPI_Comm_rank(MPI_COMM_WORLD, &rank_);
     A.scatterMatrixData();
     b.broadCastMatrixData();
     x.broadCastMatrixData();
     normVector_b = b.calculateNormOfVector();
+    floatOperationsCounter += countOfFloatOpsToCalcNorm + countOfFloatOpsToCalcSqrt;
     isNeedToTerminate = new char(0);
   }
 
   ~SimpleIterationParallelTester() override {
-   delete isNeedToTerminate;
+    delete isNeedToTerminate;
   }
 
   double invokeTest() override {
@@ -42,47 +56,40 @@ public:
     int commSize;
     MPI_Comm_size(MPI_COMM_WORLD, &commSize);
 
-
-    auto t1 = std::chrono::high_resolution_clock::now();
+    double start;
     while (!isTerminationCriterion()) {
-//      Matrix first = A * x;
-      // 2 * other.width * other.height * height_
-      floatOperationsCounter += 2 * matrixHeight_ * matrixHeight_ - matrixHeight_;
-//      Matrix second = first - b;
-      floatOperationsCounter += matrixHeight_;
-//      Matrix thirst = tau_ * second;
-      floatOperationsCounter += matrixHeight_;
-//      x -= thirst;
-      floatOperationsCounter += matrixHeight_;
+      start = MPI_Wtime();
       x -= (tau_ * ((A * x) - b));
+      timeInSec += (MPI_Wtime() - start);
+      floatOperationsCounter += countOfFloatOpsToApproximateAlgValue;
     }
-    auto t2 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> ms_double = t2 - t1;
-    double flopsResult = (double) floatOperationsCounter / ms_double.count();
+
+    flopsResult = (double) floatOperationsCounter / timeInSec;
     floatOperationsCounter = 0;
-//    x = Matrix(matrixHeight_, 1, 'n');
+    timeInSec = 0;
     return flopsResult;
   }
 
-  bool isTerminationCriterion() override {
-//    Matrix first = A * x;
-    floatOperationsCounter += 2 * matrixHeight_ * matrixHeight_ - matrixHeight_;
-//    first.scatterMatrixData();
-//    Matrix second = first - b;
-    Matrix first = A * x - b;
-    first.gatherMatrixData();
-    floatOperationsCounter += matrixHeight_;
+private:
+  bool isTerminationCriterion() {
+    const long countOfFloatOpsToCalcTempMatrix = 2 * matrixHeight_ * matrixHeight_;
+    floatOperationsCounter += countOfFloatOpsToCalcTempMatrix;
 
-//    double terminationCriterionNumber = (((*A) * (*x)) - *b).calculateNormOfVector() / b->calculateNormOfVector();
+    double start = MPI_Wtime();
+    Matrix temp = A * x - b;
+    timeInSec += (MPI_Wtime() - start);
+    start = MPI_Wtime();
+    temp.gatherMatrixData();
 
     if (rank_ == 0) {
-      double terminationCriterionNumber = (first.calculateNormOfVector()) / normVector_b;
-      std::cout << terminationCriterionNumber << std::endl;
-      floatOperationsCounter += 3 * matrixHeight_ + 1;
+      double terminationCriterionNumber = (temp.calculateNormOfVector()) / normVector_b;
+//      std::cout << terminationCriterionNumber << std::endl;
+      floatOperationsCounter += countOfFloatOpsToCalcNorm + countOfFloatOpsToCalcSqrt + 1;
       if (terminationCriterionNumber < epsilon_) {
         *isNeedToTerminate = 1;
       }
     }
+    timeInSec += (MPI_Wtime() - start);
     MPI_Bcast(isNeedToTerminate, 1, MPI_CHAR, 0, MPI_COMM_WORLD);
     return *isNeedToTerminate;
   }

@@ -68,7 +68,7 @@ public:
 
   void printChunk();
 
-  [[nodiscard]] double calculateNormOfVector() const;
+  double calculateNormOfVector() const;
 
   friend Matrix operator+(const Matrix &m1, const Matrix &m2);
 

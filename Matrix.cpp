@@ -2,7 +2,7 @@
 #include <mpi.h>
 #include <iostream>
 
-#include "MatrixError.hpp"
+#include "matrix_error.hpp"
 #include "Matrix.hpp"
 
 
@@ -31,7 +31,7 @@ void Matrix::createArrayOfDisps() {
   }
 }
 
-Matrix::Matrix(const int &height, const int &width, const char &flag) : height_(height), width_(width) {
+Matrix::Matrix(const int &height, const int &width, const char &flag = '-') : height_(height), width_(width) {
   MPI_Comm_rank(MPI_COMM_WORLD, &rank_of_process_);
   MPI_Comm_size(MPI_COMM_WORLD, &num_of_processes_);
 
@@ -60,23 +60,6 @@ Matrix::~Matrix() {
   delete[] mass_disp_s;
   delete[] mass_count_s;
   delete[] chunk_;
-
-//  if (isSeparated && !wasBroadCasting) {
-//    delete[] chunk_;
-//    return;
-//  }
-//
-//  if (isSeparated && wasBroadCasting) {
-//    delete[] array_;
-//    delete[] chunk_;
-//    return;
-//  }
-//
-//  if (!isSeparated || wasBroadCasting) {
-//    delete[] array_;
-//    return;
-//  }
-
   if (rank_of_process_ == 0 || wasBroadCasting) {
     delete[] array_;
   }
@@ -112,7 +95,6 @@ Matrix::Matrix(const Matrix &other) : height_(other.height_), width_(other.width
       mass_count_s[i] = other.mass_count_s[i];
     }
   }
-//  std::cout << "Copy!!!" << std::endl;
 }
 
 Matrix::Matrix(const Matrix &&other) noexcept: height_(other.height_), width_(other.width_),
@@ -124,30 +106,12 @@ Matrix::Matrix(const Matrix &&other) noexcept: height_(other.height_), width_(ot
                                                wasBroadCasting(other.wasBroadCasting) {
   if (rank_of_process_ == 0) {
     array_ = other.array_;
-//    array_ = new double[height_ * width_];
-//    for (int i = 0; i < height_; ++i) {
-//      for (int j = 0; j < width_; ++j) {
-//        array_[i * width_ + j] = other.array_[i * width_ + j];
-//      }
-//    }
   }
 
   if (isSeparated) {
     chunk_ = other.chunk_;
-//    chunk_ = new double[count_of_chunk_rows_ * width_];
-//    for (int i = 0; i < count_of_chunk_rows_; ++i) {
-//      for (int j = 0; j < width_; ++j) {
-//        chunk_[i * width_ + j] = other.chunk_[i * width_ + j];
-//      }
-//    }
     mass_count_s = other.mass_count_s;
     mass_disp_s = other.mass_disp_s;
-//    mass_disp_s = new int[num_of_processes_];
-//    mass_count_s = new int[num_of_processes_];
-//    for (int i = 0; i < num_of_processes_; ++i) {
-//      mass_disp_s[i] = other.mass_disp_s[i];
-//      mass_count_s[i] = other.mass_count_s[i];
-//    }
   }
 }
 
@@ -209,7 +173,6 @@ Matrix &Matrix::operator*=(const Matrix &other) {
 
   if (isSeparated && !other.isSeparated) {
     for (int i = 0; i < temp.count_of_chunk_rows_; ++i) {
-//      std::cout << "multiple" << std::endl;
       double *c = temp.chunk_ + i * other.width_;
 
       for (int k = 0; k < other.height_; ++k) {
@@ -262,9 +225,6 @@ Matrix &Matrix::operator-=(const Matrix &other) {
   if (width_ != other.width_ || height_ != other.height_) {
     throw matrix_error("Invalid operation -=, wrong matrix dimensions.");
   }
-//  if (other.array_ == nullptr) {
-//    throw matrix_error("Invalid operation -=, need to broad cast.");
-//  }
 
   if (isSeparated && other.isSeparated) {
     for (int i = 0; i < count_of_chunk_rows_; ++i) {
@@ -275,7 +235,6 @@ Matrix &Matrix::operator-=(const Matrix &other) {
   }
 
   if (wasBroadCasting && !other.wasBroadCasting) {
-//    std::cout << "1 and !2" << std::endl;
     for (int i = other.mass_disp_s[other.rank_of_process_] / width_;
          i < other.mass_count_s[other.rank_of_process_] / width_ +
              other.mass_disp_s[other.rank_of_process_] / width_; ++i) {
@@ -286,12 +245,10 @@ Matrix &Matrix::operator-=(const Matrix &other) {
   }
 
   if (!wasBroadCasting && other.wasBroadCasting) {
-//    std::cout << "!1 and 2" << std::endl;
     for (int i = mass_disp_s[rank_of_process_] / width_; i < mass_count_s[rank_of_process_] / width_ +
-                                                              mass_disp_s[rank_of_process_] / width_; ++i) {
+                                                             mass_disp_s[rank_of_process_] / width_; ++i) {
       for (int j = 0; j < width_; ++j) {
         chunk_[(i - mass_disp_s[rank_of_process_] / width_) * width_ + j] -= other.array_[i * width_ + j];
-//        std::cout << "Calculate: " << chunk_[(i - mass_count_s[rank_of_process_] / width_) * width_ + j] << std::endl;
       }
     }
   }
@@ -314,34 +271,6 @@ double &Matrix::operator[](const int &index) {
 
 double Matrix::operator[](const int &index) const {
   return chunk_[index];
-}
-
-double Matrix::A_1() {
-  double max = 0;
-  double tmp;
-  for (int i = 0; i < height_; ++i) {
-    tmp = 0;
-    for (int j = 0; j < width_; ++j) {
-      tmp += std::abs(array_[i * width_ + j]);
-    }
-    if (tmp > max)
-      max = tmp;
-  }
-  return max;
-}
-
-double Matrix::A_inf() {
-  double max = 0;
-  double tmp;
-  for (int i = 0; i < height_; ++i) {
-    tmp = 0;
-    for (int j = 0; j < width_; ++j) {
-      tmp += std::abs(array_[i * width_ + j]);
-    }
-    if (tmp > max)
-      max = tmp;
-  }
-  return max;
 }
 
 void Matrix::printFullMatrix() {
@@ -368,9 +297,8 @@ void Matrix::printChunk() {
   }
 }
 
-[[nodiscard]] double Matrix::calculateNormOfVector() const {
+double Matrix::calculateNormOfVector() const {
   if (rank_of_process_ == 0 || wasBroadCasting) {
-//    std::cout << "NORM!" << std::endl;
     if (width_ != 1) {
       return -1;
     }
@@ -381,6 +309,7 @@ void Matrix::printChunk() {
     result = sqrt(result);
     return result;
   }
+  return -1;
 }
 
 Matrix operator+(const Matrix &m1, const Matrix &m2) {
@@ -400,8 +329,6 @@ Matrix operator*(const Matrix &m1, const Matrix &m2) {
 
   Matrix temp = Matrix(m1);
   temp *= m2;
-//  std::cout << temp.wasBroadCasting << std::endl;
-//  std::cout << temp.isSeparated << std::endl;
   return temp;
 }
 
@@ -416,7 +343,6 @@ Matrix operator-(const Matrix &m1, const Matrix &m2) {
     throw matrix_error("Invalid operation -, wrong matrix dimensions.");
   }
   Matrix temp(m1);
-//  temp.printFullMatrix();
   temp -= m2;
   return temp;
 }
@@ -486,35 +412,21 @@ void Matrix::scatterMatrixData() {
   createArrayOfChunkSizes();
   createArrayOfDisps();
   if (rank_of_process_ == 0) {
-
-//    std::cout << "Sending" << std::endl;
-//    for (int i = 0; i < num_of_processes_; ++i) {
-//      std::cout << mass_count_s[i] << std::endl;
-//      std::cout << mass_disp_s[i] << std::endl;
-//    }
     if (MPI_SUCCESS ==
         MPI_Scatterv(array_, mass_count_s, mass_disp_s, MPI_DOUBLE, chunk_, count_of_chunk_rows_ * width_, MPI_DOUBLE,
                      0,
                      MPI_COMM_WORLD)) {
-//      std::cout << "Done!" << std::endl;
     } else {
-//      std::cout << "Sad!" << std::endl;
     }
   }
 
   if (rank_of_process_ != 0) {
-//    std::cout << "Receiving" << std::endl;
     if (MPI_SUCCESS ==
         MPI_Scatterv(nullptr, nullptr, nullptr, MPI_DOUBLE, chunk_, count_of_chunk_rows_ * width_, MPI_DOUBLE, 0,
                      MPI_COMM_WORLD)) {
-//      std::cout << "Done!" << std::endl;
     } else {
-//      std::cout << "Sad!" << std::endl;
     }
   }
-//  std::cout << "Begin Chunk" << std::endl;
-//  printChunk();
-//  std::cout << "End Chunk" << std::endl;
 
 }
 
