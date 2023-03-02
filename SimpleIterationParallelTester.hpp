@@ -70,6 +70,10 @@ public:
     return flopsResult;
   }
 
+  double getTimeResultInSec() {
+    return timeInSec;
+  }
+
 private:
   bool isTerminationCriterion() {
     const long countOfFloatOpsToCalcTempMatrix = 2 * matrixHeight_ * matrixHeight_;
